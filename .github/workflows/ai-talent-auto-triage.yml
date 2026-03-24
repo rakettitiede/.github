@@ -1,0 +1,46 @@
+name: '🏷️ — AI Talent auto triage'
+
+on:
+  workflow_call:
+
+jobs:
+  triage:
+    name: '🏷️ — Assign and label'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: 'Auto-assign author'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            const number = context.payload.issue?.number
+              ?? context.payload.pull_request?.number;
+            await github.rest.issues.addAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: number,
+              assignees: [context.actor]
+            });
+
+      - name: 'Auto-label from branch prefix'
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            const branch = context.payload.pull_request.head.ref;
+            const map = {
+              'fix/': 'bug', 'feat/': 'enhancement',
+              'refactor/': 'refactor', 'docs/': 'docs',
+              'infra/': 'infra', 'ci/': 'infra', 'chore/': 'chore'
+            };
+            const label = Object.entries(map).find(([p]) => branch.startsWith(p))?.[1];
+            if (!label) return;
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: [label]
+            });
