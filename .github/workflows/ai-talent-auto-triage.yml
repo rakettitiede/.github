@@ -2,6 +2,9 @@ name: '🏷️ — AI Talent auto triage'
 
 on:
   workflow_call:
+    secrets:
+      ORG_PROJECT_PAT:
+        required: true
 
 jobs:
   triage:
@@ -44,3 +47,51 @@ jobs:
               issue_number: context.payload.pull_request.number,
               labels: [label]
             });
+
+  project-fields:
+    name: '📋 — Set project fields'
+    needs: triage
+    runs-on: ubuntu-latest
+    permissions: {}
+
+    steps:
+      - name: 'Add to project and set fields'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          github-token: ${{ secrets.ORG_PROJECT_PAT }}
+          script: |
+            const nodeId = context.payload.pull_request?.node_id
+              ?? context.payload.issue?.node_id;
+
+            const { addProjectV2ItemById: { item: { id: itemId } } } =
+              await github.graphql(`
+                mutation($projectId: ID!, $contentId: ID!) {
+                  addProjectV2ItemById(input: {
+                    projectId: $projectId, contentId: $contentId
+                  }) { item { id } }
+                }
+              `, { projectId: 'PVT_kwDOAJbFRc4BQpOk', contentId: nodeId });
+
+            const today = new Date().toISOString().split('T')[0];
+
+            const fields = [
+              { fieldId: 'PVTF_lADOAJbFRc4BQpOkzg-tENY', value: { number: 1 } },
+              { fieldId: 'PVTF_lADOAJbFRc4BQpOkzg-tENc', value: { date: today } },
+              { fieldId: 'PVTF_lADOAJbFRc4BQpOkzg-tENg', value: { date: today } },
+              { fieldId: 'PVTIF_lADOAJbFRc4BQpOkzg_v0m8', value: { iterationId: '01aca77b' } },
+            ];
+
+            for (const { fieldId, value } of fields) {
+              await github.graphql(`
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: ProjectV2FieldValue!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId, itemId: $itemId, fieldId: $fieldId, value: $value
+                  }) { projectV2Item { id } }
+                }
+              `, {
+                projectId: 'PVT_kwDOAJbFRc4BQpOk',
+                itemId,
+                fieldId,
+                value,
+              });
+            }
