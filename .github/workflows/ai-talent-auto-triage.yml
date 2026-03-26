@@ -2,6 +2,9 @@ name: '🏷️ — AI Talent auto triage'
 
 on:
   workflow_call:
+    secrets:
+      ORG_PROJECT_PAT:
+        required: true
 
 jobs:
   triage:
@@ -18,29 +21,108 @@ jobs:
           script: |
             const number = context.payload.issue?.number
               ?? context.payload.pull_request?.number;
+            if (!number) return;
             await github.rest.issues.addAssignees({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: number,
-              assignees: [context.actor]
+              assignees: [context.actor],
             });
 
-      - name: 'Auto-label from branch prefix'
-        if: github.event_name == 'pull_request'
+      - name: 'Auto-label from triage section'
+        if: github.event_name == 'pull_request' || github.event.pull_request != null
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
         with:
           script: |
-            const branch = context.payload.pull_request.head.ref;
-            const map = {
-              'fix/': 'bug', 'feat/': 'enhancement',
-              'refactor/': 'refactor', 'docs/': 'docs',
-              'infra/': 'infra', 'ci/': 'infra', 'chore/': 'chore'
-            };
-            const label = Object.entries(map).find(([p]) => branch.startsWith(p))?.[1];
-            if (!label) return;
+            const body = context.payload.pull_request?.body ?? '';
+            const triage = body.match(/<!--triage-start-->([\s\S]*?)<!--triage-end-->/)?.[1] ?? '';
+            const match = triage.match(/\|\s*Label\s*\|\s*(bug|enhancement|refactor|docs|infra|chore)\s*\|/i);
+            if (!match) return;
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              labels: [label]
+              labels: [match[1].toLowerCase()],
             });
+
+  project-fields:
+    name: '📋 — Populate project fields'
+    runs-on: ubuntu-latest
+    needs: triage
+    permissions: {}
+
+    steps:
+      - name: 'Add to project and set fields'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          github-token: ${{ secrets.ORG_PROJECT_PAT }}
+          script: |
+            const projectId = 'PVT_kwDOAJbFRc4BQpOk';
+            const nodeId = context.payload.pull_request?.node_id
+              ?? context.payload.issue?.node_id;
+            if (!nodeId) return;
+
+            const { addProjectV2ItemById: { item } } = await github.graphql(`
+              mutation($projectId: ID!, $contentId: ID!) {
+                addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                  item { id }
+                }
+              }`, { projectId, contentId: nodeId });
+            const itemId = item.id;
+
+            const today = new Date().toISOString().split('T')[0];
+            const body = context.payload.pull_request?.body ?? context.payload.issue?.body ?? '';
+            const triage = body.match(/<!--triage-start-->([\s\S]*?)<!--triage-end-->/)?.[1] ?? '';
+
+            const priorityMatch = triage.match(/\|\s*Priority\s*\|\s*(P[012])\s*\|/i);
+            const sizeMatch = triage.match(/\|\s*Size\s*\|\s*(XS|S|M|L|XL)\s*\|/i);
+
+            const priorityOptionMap = { P0: '79628723', P1: '0a877460', P2: 'da944a9c' };
+            const sizeOptionMap = { XS: '6c6483d2', S: 'f784b110', M: '7515a9f1', L: '817d0097', XL: 'db339eb2' };
+
+            const setField = (fieldId, value) => github.graphql(`
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: ProjectV2FieldValue!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId, itemId: $itemId, fieldId: $fieldId, value: $value
+                }) { projectV2Item { id } }
+              }`, { projectId, itemId, fieldId, value });
+
+            // Fetch active sprint dynamically
+            const { organization: { projectV2: { field } } } = await github.graphql(`
+              query($projectId: ID!) {
+                organization(login: "rakettitiede") {
+                  projectV2(number: 4) {
+                    field(name: "Sprint") {
+                      ... on ProjectV2IterationField {
+                        configuration {
+                          iterations { id title startDate duration }
+                        }
+                      }
+                    }
+                  }
+                }
+              }`, { projectId });
+
+            const iterations = field?.configuration?.iterations ?? [];
+            const todayDate = new Date(today);
+            const activeSprint = iterations.find(it => {
+              const start = new Date(it.startDate);
+              const end = new Date(start);
+              end.setDate(end.getDate() + it.duration);
+              return todayDate >= start && todayDate < end;
+            });
+
+            await setField('PVTF_lADOAJbFRc4BQpOkzg-tENY', { number: 1 });
+            await setField('PVTF_lADOAJbFRc4BQpOkzg-tENc', { date: today });
+            await setField('PVTF_lADOAJbFRc4BQpOkzg-tENg', { date: today });
+            if (activeSprint) {
+              await setField('PVTIF_lADOAJbFRc4BQpOkzg_v0m8', { iterationId: activeSprint.id });
+            }
+            if (priorityMatch) {
+              const optionId = priorityOptionMap[priorityMatch[1].toUpperCase()];
+              if (optionId) await setField('PVTSSF_lADOAJbFRc4BQpOkzg-tENQ', { singleSelectOptionId: optionId });
+            }
+            if (sizeMatch) {
+              const optionId = sizeOptionMap[sizeMatch[1].toUpperCase()];
+              if (optionId) await setField('PVTSSF_lADOAJbFRc4BQpOkzg-tENU', { singleSelectOptionId: optionId });
+            }
