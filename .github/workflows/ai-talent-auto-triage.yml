@@ -89,7 +89,7 @@ jobs:
 
             // Fetch active sprint dynamically
             const { organization: { projectV2: { field } } } = await github.graphql(`
-              query($projectId: ID!) {
+              query {
                 organization(login: "rakettitiede") {
                   projectV2(number: 4) {
                     field(name: "Sprint") {
