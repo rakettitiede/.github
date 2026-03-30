@@ -57,7 +57,8 @@ jobs:
         with:
           github-token: ${{ secrets.ORG_PROJECT_PAT }}
           script: |
-            const projectId = 'PVT_kwDOAJbFRc4BQpOk';
+            const AI_TALENT_SEARCH_PROJECT_ID = 'PVT_kwDOAJbFRc4BQpOk';
+            const AI_TALENT_SEARCH_PROJECT_NUMBER = 4;
             const nodeId = context.payload.pull_request?.node_id
               ?? context.payload.issue?.node_id;
             if (!nodeId) return;
@@ -67,7 +68,7 @@ jobs:
                 addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
                   item { id }
                 }
-              }`, { projectId, contentId: nodeId });
+              }`, { projectId: AI_TALENT_SEARCH_PROJECT_ID, contentId: nodeId });
             const itemId = item.id;
 
             const today = new Date().toISOString().split('T')[0];
@@ -85,13 +86,13 @@ jobs:
                 updateProjectV2ItemFieldValue(input: {
                   projectId: $projectId, itemId: $itemId, fieldId: $fieldId, value: $value
                 }) { projectV2Item { id } }
-              }`, { projectId, itemId, fieldId, value });
+              }`, { projectId: AI_TALENT_SEARCH_PROJECT_ID, itemId, fieldId, value });
 
             // Fetch active sprint dynamically
             const { organization: { projectV2: { field } } } = await github.graphql(`
-              query($projectId: ID!) {
+              query {
                 organization(login: "rakettitiede") {
-                  projectV2(number: 4) {
+                  projectV2(number: ${AI_TALENT_SEARCH_PROJECT_NUMBER}) {
                     field(name: "Sprint") {
                       ... on ProjectV2IterationField {
                         configuration {
@@ -101,7 +102,7 @@ jobs:
                     }
                   }
                 }
-              }`, { projectId });
+              }`, { projectId: AI_TALENT_SEARCH_PROJECT_ID });
 
             const iterations = field?.configuration?.iterations ?? [];
             const todayDate = new Date(today);
