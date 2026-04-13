@@ -22,7 +22,7 @@ See each repo's `docs/deployment/local.md` for detailed setup instructions.
 
 ## Commit Messages
 
-We use [Conventional Commits](https://www.conventionalcommits.org/):
+We use [Conventional Commits](https://www.conventionalcommits.org/). Since we squash-merge all PRs, the convention applies to the **PR title** (which becomes the squashed commit message). Individual commits on a feature branch can be informal.
 
 ```
 feat: add new search filter
@@ -86,3 +86,48 @@ For significant technical decisions, create an ADR in `docs/architecture/adr/`:
 
 Smoke tests only for Pyry and Minna. Full integration tests for MCP servers.
 Never add LLM behaviour tests — non-deterministic responses make them brittle and low value.
+
+## Releases
+
+All 4 ai-talent services use [release-please](https://github.com/googleapis/release-please) to manage releases. release-please watches commits on `main` and keeps an always-open release PR with the next version bump and changelog.
+
+### How a release happens
+
+1. PRs are merged to `main` with conventional-commit titles (`feat:`, `fix:`, `chore:` etc.)
+2. release-please updates the open release PR (e.g. `chore(main): release v1.2.3`) with the calculated version and changelog
+3. When ready to ship, merge the release PR
+4. release-please creates the git tag and the GitHub Release
+5. The tag triggers `google-cloudrun-docker.yml` which deploys to Cloud Run
+
+No laptop `git push --tags` required.
+
+### Version bumps
+
+| Commit prefix | Bump (1.x+) | Bump (0.x) |
+|---|---|---|
+| `fix:` | patch | patch |
+| `feat:` | minor | patch |
+| `feat!:` or `BREAKING CHANGE:` | major | minor |
+| `docs:`, `chore:`, `refactor:`, `test:`, `ci:`, `build:`, `perf:`, `style:` | none | none |
+
+`ai-talent-network-mcp` is currently on `0.x` so its bumps follow the right column. The other 3 repos are on `1.x+` and follow the left column.
+
+### Release cadence
+
+Daily releases at most. The always-open release PR is the batching mechanism: changes accumulate during the day, you merge once when ready to ship.
+
+### If main is red
+
+The release workflow does **not** pre-check CI status. The safety net lives inside `google-cloudrun-docker.yml`: the `quality-assurance` job runs before deploy. If QA fails, Cloud Run is never touched — production is safe.
+
+If you cut a release on a red main:
+
+1. release-please creates tag `vX.Y.Z` pointing at the broken commit
+2. The tag-triggered deploy runs QA, QA fails, deploy is skipped
+3. Cleanup: delete the bad tag locally and on origin, fix main via PR, merge the next release PR
+
+```bash
+git fetch --tags
+git tag -d vX.Y.Z
+git push --delete origin vX.Y.Z
+```
