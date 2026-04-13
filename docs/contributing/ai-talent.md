@@ -18,7 +18,7 @@ See each repo's `docs/deployment/local.md` for detailed setup instructions.
 2. Make your changes
 3. Run tests: `npm test`
 4. Commit with a conventional commit message
-5. Push and open a PR using the AI Talent template
+5. Push and open a PR
 
 ## Commit Messages
 
@@ -35,12 +35,10 @@ chore: update dependencies
 
 ## Pull Requests
 
-Always use the AI Talent PR template when opening PRs. Append `?template=ai-talent.md` to the GitHub PR URL, or use it directly in `gh pr create`:
+Each ai-talent repo has a default PR template at `.github/pull_request_template.md` that auto-loads on `gh pr create` and in the GitHub web UI. When opening a PR, fill in the `## What` section and the triage block:
 
-```bash
-gh pr create \
-  --title "fix: your title here" \
-  --body "## What
+```
+## What
 Your description here.
 
 <!--triage-start-->
@@ -54,7 +52,7 @@ Your description here.
 | Priority |   P1   |
 | Size     |   S    |
 | Label    | chore  |
-<!--triage-end-->"
+<!--triage-end-->
 ```
 
 ### Auto-triage
