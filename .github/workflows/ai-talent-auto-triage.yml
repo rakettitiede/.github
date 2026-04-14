@@ -16,6 +16,7 @@ jobs:
 
     steps:
       - name: 'Auto-assign author'
+        if: ${{ !endsWith(github.actor, '[bot]') }}
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
         with:
           script: |
@@ -34,6 +35,19 @@ jobs:
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
         with:
           script: |
+            const pr = context.payload.pull_request;
+            if (!pr) return;
+
+            if (pr.user?.login?.endsWith('[bot]')) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: ['chore'],
+              });
+              return;
+            }
+
             const body = context.payload.pull_request?.body ?? '';
             const triage = body.match(/<!--triage-start-->([\s\S]*?)<!--triage-end-->/)?.[1] ?? '';
             const match = triage.match(/\|\s*Label\s*\|\s*(bug|enhancement|refactor|docs|infra|chore)\s*\|/i);
@@ -62,6 +76,8 @@ jobs:
             const nodeId = context.payload.pull_request?.node_id
               ?? context.payload.issue?.node_id;
             if (!nodeId) return;
+
+            const isBot = (context.payload.pull_request?.user?.login ?? context.payload.issue?.user?.login ?? '').endsWith('[bot]');
 
             const { addProjectV2ItemById: { item } } = await github.graphql(`
               mutation($projectId: ID!, $contentId: ID!) {
@@ -119,11 +135,16 @@ jobs:
             if (activeSprint) {
               await setField('PVTIF_lADOAJbFRc4BQpOkzg_v0m8', { iterationId: activeSprint.id });
             }
-            if (priorityMatch) {
-              const optionId = priorityOptionMap[priorityMatch[1].toUpperCase()];
-              if (optionId) await setField('PVTSSF_lADOAJbFRc4BQpOkzg-tENQ', { singleSelectOptionId: optionId });
-            }
-            if (sizeMatch) {
-              const optionId = sizeOptionMap[sizeMatch[1].toUpperCase()];
-              if (optionId) await setField('PVTSSF_lADOAJbFRc4BQpOkzg-tENU', { singleSelectOptionId: optionId });
+            if (isBot) {
+              await setField('PVTSSF_lADOAJbFRc4BQpOkzg-tENQ', { singleSelectOptionId: priorityOptionMap.P2 });
+              await setField('PVTSSF_lADOAJbFRc4BQpOkzg-tENU', { singleSelectOptionId: sizeOptionMap.XS });
+            } else {
+              if (priorityMatch) {
+                const optionId = priorityOptionMap[priorityMatch[1].toUpperCase()];
+                if (optionId) await setField('PVTSSF_lADOAJbFRc4BQpOkzg-tENQ', { singleSelectOptionId: optionId });
+              }
+              if (sizeMatch) {
+                const optionId = sizeOptionMap[sizeMatch[1].toUpperCase()];
+                if (optionId) await setField('PVTSSF_lADOAJbFRc4BQpOkzg-tENU', { singleSelectOptionId: optionId });
+              }
             }
