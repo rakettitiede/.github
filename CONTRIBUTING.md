@@ -1,3 +1,3 @@
 # Contributing to Rakettitiede
 
-For **AI Talent projects**, see the [AI Talent Contributing Guide](https://github.com/rakettitiede/.github/blob/main/docs/contributing/ai-talent.md).
+For **AI Talent projects**, see the [AI Talent Contributing Guide](https://github.com/rakettitiede/ai-talent-platform/blob/main/CONTRIBUTING.md).
